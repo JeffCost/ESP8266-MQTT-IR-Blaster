@@ -18,12 +18,17 @@
 #include <Ticker.h>                                           // For LED status
 #include <EasyNTPClient.h>
 
+#include "DHT.h"
+
+#define DHTPIN 12     // what digital pin the DHT22 is conected to
+#define DHTTYPE DHT22   // there are multiple kinds of DHT sensors
+
 // User settings are below here
 
 const bool getExternalIP = true;                              // Set to false to disable querying external IP
 
 const bool getTime = true;                                    // Set to false to disable querying for the time
-const int timeOffset = -14400;                                // Timezone offset in seconds
+const int timeOffset = 3 * 60 * 60;                                // Timezone offset in seconds
 
 const bool enableMDNSServices = true;                         // Use mDNS services, must be enabled for ArduinoOTA
 
@@ -52,6 +57,8 @@ char mqtt_pass[20] = "";
 const char* mqtt_topic_rc = "/received";
 const char* mqtt_topic_snd = "/sent";
 const char* mqtt_topic_cmd = "/cmd";
+const char* mqtt_topic_hum = "/humidity";
+const char* mqtt_topic_temp = "/temperature";
 const char* fingerprint = "8D 83 C3 5F 0A 09 84 AE B0 64 39 23 8F 05 9E 4D 5E 08 60 06";
 
 char static_ip[16] = "10.0.1.10";
@@ -94,6 +101,8 @@ bool externalIPError = false;
 bool userIDError = false;
 bool ntpError = false;
 
+DHT dht(DHTPIN, DHTTYPE);
+
 class Code {
   public:
     char encoding[14] = "";
@@ -116,6 +125,12 @@ Code last_send_2;
 Code last_send_3;
 Code last_send_4;
 Code last_send_5;
+
+long mqtt_humTemp_lastMsg = millis();
+float temp = 0.0;
+float hum = 0.0;
+float diffTemp = 0.2;
+float diffHum = 1.0;
 
 
 //+=============================================================================
@@ -1570,6 +1585,8 @@ void loop() {
     }
   }
 
+  checkHumTemp();
+
   ArduinoOTA.handle();
   decode_results  results;                                        // Somewhere to store the results
 
@@ -1617,3 +1634,36 @@ void mqtt_calback(char* topic, byte * payload, unsigned int length) {
   }
   jsonBuffer.clear();
 }
+
+bool checkBound(float newValue, float prevValue, float maxDiff) {
+  return (!isnan(newValue)
+          && (newValue < prevValue - maxDiff || newValue > prevValue + maxDiff));
+}
+
+void checkHumTemp()
+{
+  long now = millis();
+  if (now - mqtt_humTemp_lastMsg > 5000) {
+    mqtt_humTemp_lastMsg = now;
+
+    float newTemp = dht.readTemperature();
+    float newHum = dht.readHumidity();
+
+
+    if (checkBound(newHum, hum, diffHum)) {
+      hum = newHum;
+      Serial.print("New humidity:");
+      Serial.println(String(newHum).c_str());
+      mqtt_client.publish(("/" + String(host_name) + String(mqtt_topic_hum)).c_str(), ("{ humidity: " + String(newHum) + ", epoch: " + String(timeClient.getUnixTime()) + "}").c_str(), true);
+    }
+
+    if (checkBound(newTemp, temp, diffTemp)) {
+      temp = newTemp;
+      Serial.print("New temperature:");
+      Serial.println(String(newTemp).c_str());
+      mqtt_client.publish(("/" + String(host_name) + String(mqtt_topic_temp)).c_str(), ("{ tempertature: " + String(newTemp) + ", epoch: " + String(timeClient.getUnixTime()) + "}").c_str(), true);
+    }
+  }
+}
+
+
