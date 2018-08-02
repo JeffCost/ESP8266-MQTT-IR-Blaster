@@ -61,8 +61,8 @@ const char* mqtt_topic_hum = "/humidity";
 const char* mqtt_topic_temp = "/temperature";
 const char* fingerprint = "8D 83 C3 5F 0A 09 84 AE B0 64 39 23 8F 05 9E 4D 5E 08 60 06";
 
-char static_ip[16] = "10.0.1.10";
-char static_gw[16] = "10.0.1.1";
+char static_ip[16] = "192.168.1.8";
+char static_gw[16] = "192.168.1.1";
 char static_sn[16] = "255.255.255.0";
 
 DynamicJsonBuffer jsonBuffer;
@@ -454,13 +454,15 @@ bool setupWifi(bool resetConf) {
   WiFiManagerParameter custom_mqtt_pass("mqtt_pass", "Choose a MQTT password", mqtt_pass, 20);
   wifiManager.addParameter(&custom_mqtt_pass);
 
-  IPAddress sip, sgw, ssn;
-  sip.fromString(static_ip);
-  sgw.fromString(static_gw);
-  ssn.fromString(static_sn);
-  Serial.println("Using Static IP");
-  wifiManager.setSTAStaticIPConfig(sip, sgw, ssn);
-
+  if (static_ip != "") {
+    IPAddress sip, sgw, ssn;
+    sip.fromString(static_ip);
+    sgw.fromString(static_gw);
+    ssn.fromString(static_sn);
+    Serial.println("Using Static IP");
+    wifiManager.setSTAStaticIPConfig(sip, sgw, ssn);
+  }
+  
   // fetches ssid and pass and tries to connect
   // if it does not connect it starts an access point with the specified name
   // and goes into a blocking loop awaiting configuration
